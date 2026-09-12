@@ -1,5 +1,6 @@
 import { useState, useEffect, createContext, useContext } from "react";
 import axios from "axios";
+import { calculateClinicalRisk } from "./utils/clinicalFallback";
 import Header from "./components/Header";
 import LandingPage from "./components/LandingPage";
 import SignInPage from "./components/SignInPage";
@@ -128,6 +129,18 @@ export default function App() {
       setMode("RESULT");
     } catch (err) {
       console.error("Prediction error:", err);
+      // If network error (backend unreachable), use client-side clinical fallback
+      if (!err.response) {
+        const fallbackResult = calculateClinicalRisk(payload);
+        setResult(fallbackResult);
+        setAnswers({
+          ...payload,
+          patient: confirmedData.patient,
+          report_info: confirmedData.report_info,
+        });
+        setMode("RESULT");
+        return;
+      }
       const detail = err.response?.data?.detail || err.message;
       setPredictionError(`Screening failed: ${detail}. Please check backend connection.`);
     } finally {

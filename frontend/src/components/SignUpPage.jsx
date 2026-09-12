@@ -1,5 +1,6 @@
 import { useState } from "react";
 import axios from "axios";
+import { createLocalSession } from "../utils/clinicalFallback";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -8,7 +9,7 @@ export default function SignUpPage({ onNavigate, onAuthSuccess }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [tenantAction, setTenantAction] = useState("create"); // "create" or "join"
+  const [tenantAction, setTenantAction] = useState("create");
   const [organizationName, setOrganizationName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -20,22 +21,18 @@ export default function SignUpPage({ onNavigate, onAuthSuccess }) {
       setError("Please fill in all required fields.");
       return;
     }
-
     if (password.length < 6) {
       setError("Password must be at least 6 characters long.");
       return;
     }
-
     if (password !== confirmPassword) {
       setError("Passwords do not match. Please verify.");
       return;
     }
-
     if (tenantAction === "create" && !organizationName.trim()) {
       setError("Please enter a name for your clinic or organization.");
       return;
     }
-
     if (tenantAction === "join" && !joinCode.trim()) {
       setError("Please enter the organization join code provided by your administrator.");
       return;
@@ -58,11 +55,23 @@ export default function SignUpPage({ onNavigate, onAuthSuccess }) {
       const { access_token, user, tenant } = res.data;
       onAuthSuccess({ token: access_token, user, tenant });
     } catch (err) {
+      // If backend is unreachable (network error), fall back to local session
+      if (!err.response) {
+        const org = tenantAction === "create" ? organizationName.trim() : "Shared Clinic";
+        const localSession = createLocalSession(name.trim(), org);
+        onAuthSuccess(localSession);
+        return;
+      }
       const detail = err.response?.data?.detail || "Registration failed. Please check your information and try again.";
       setError(detail);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDemoLogin = () => {
+    const localSession = createLocalSession("Dr. Clinician", "Apex Health Clinic");
+    onAuthSuccess(localSession);
   };
 
   return (
@@ -91,7 +100,6 @@ export default function SignUpPage({ onNavigate, onAuthSuccess }) {
           )}
 
           <form onSubmit={handleSubmit} className="auth-form">
-            {/* User Details */}
             <div className="auth-row-2">
               <div className="auth-group">
                 <label>Full Name *</label>
@@ -148,7 +156,6 @@ export default function SignUpPage({ onNavigate, onAuthSuccess }) {
               </div>
             </div>
 
-            {/* Tenant Setup Tabs */}
             <div className="tenant-setup-box">
               <span className="tenant-box-title">Organization Setup</span>
               <div className="tenant-toggle-tabs">
@@ -207,6 +214,18 @@ export default function SignUpPage({ onNavigate, onAuthSuccess }) {
               {loading ? "Creating Account..." : "Create Account & Enter Workspace →"}
             </button>
           </form>
+
+          {/* Demo / offline access */}
+          <div style={{ textAlign: "center", margin: "16px 0 4px" }}>
+            <span style={{ color: "var(--text-muted)", fontSize: "0.82rem" }}>— or skip registration —</span>
+          </div>
+          <button
+            className="auth-submit-btn"
+            style={{ background: "var(--card-border)", color: "var(--text-primary)", marginTop: 0 }}
+            onClick={handleDemoLogin}
+          >
+            🧪 Try Demo Mode (No Account Needed)
+          </button>
 
           <div className="auth-footer-prompt">
             <span>Already have an account?</span>

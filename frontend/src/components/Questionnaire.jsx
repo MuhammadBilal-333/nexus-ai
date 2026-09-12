@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import { calculateClinicalRisk } from "../utils/clinicalFallback";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -120,8 +121,15 @@ export default function Questionnaire({ onResult }) {
         const res = await axios.post(`${API_URL}/predict`, payload);
         onResult(res.data, newAnswers);
       } catch (err) {
-        addMessage("bot", "⚠️ Could not connect to the prediction server. Make sure the backend is running on port 8000.");
-        setLoading(false);
+        // If network error, use client-side clinical fallback model
+        if (!err.response) {
+          addMessage("bot", "🔄 Running offline clinical analysis...");
+          const fallback = calculateClinicalRisk(payload);
+          onResult(fallback, newAnswers);
+        } else {
+          addMessage("bot", "⚠️ Prediction server returned an error. Please check your input values.");
+          setLoading(false);
+        }
       }
     }
   };
