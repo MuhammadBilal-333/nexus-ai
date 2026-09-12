@@ -3,6 +3,7 @@ import axios from "axios";
 import FeatureImportanceChart from "./FeatureImportanceChart";
 import ModelMetrics from "./ModelMetrics";
 import BloodVisualizer from "./BloodVisualizer";
+import { generateClientPdfReport } from "../utils/pdfReportGenerator";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -111,34 +112,36 @@ export default function ResultDashboard({ result, answers, onReset }) {
     setDownloadingPdf(true);
     setDownloadError("");
 
-    try {
-      const payload = {
-        patient: {
-          name: answers.patient?.name || "Not Specified",
-          age: answers.age,
-          sex: answers.sex,
-        },
-        report_info: {
-          filename: answers.report_info?.filename || "Screening_Report",
-        },
-        parameters: {
-          haemoglobin: answers.haemoglobin,
-          platelet_count: answers.platelet_count,
-          pdw: answers.pdw,
-          wbc_count: answers.wbc_count || 0,
-        },
-        prediction: {
-          risk_level: result.risk_level,
-          probability: result.probability,
-          message: result.message,
-        },
-      };
+    const payload = {
+      patient: {
+        name: answers.patient?.name || answers.patient_name || "Not Specified",
+        age: answers.age,
+        sex: answers.sex,
+      },
+      report_info: {
+        filename: answers.report_info?.filename || "Screening_Report",
+      },
+      parameters: {
+        haemoglobin: answers.haemoglobin,
+        platelet_count: answers.platelet_count,
+        pdw: answers.pdw,
+        wbc_count: answers.wbc_count || 0,
+      },
+      prediction: {
+        risk_level: result.risk_level,
+        probability: result.probability,
+        message: result.message,
+      },
+    };
 
+    try {
+      // Try server generation first if backend is running (3s timeout)
       const response = await axios.post(`${API_URL}/api/generate-report`, payload, {
         responseType: "blob",
+        timeout: 3000,
       });
 
-      // Create download link
+      // Create download link from server response
       const blob = new Blob([response.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -149,8 +152,13 @@ export default function ResultDashboard({ result, answers, onReset }) {
       link.parentNode.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      console.error("PDF generation failed:", err);
-      setDownloadError("Could not generate PDF report. Make sure backend is running.");
+      console.warn("Backend PDF generation unavailable, generating client-side report:", err);
+      try {
+        generateClientPdfReport(answers, result);
+      } catch (clientErr) {
+        console.error("Client PDF generation error:", clientErr);
+        setDownloadError("Could not generate PDF. Please try again.");
+      }
     } finally {
       setDownloadingPdf(false);
     }
