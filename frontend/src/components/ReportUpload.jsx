@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import axios from "axios";
+import { extractReportClientSide } from "../utils/clinicalFallback";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -67,28 +68,37 @@ export default function ReportUpload({ onExtractionComplete, onSwitchToManual })
     formData.append("file", fileToUpload);
 
     try {
-      setTimeout(() => setLoadingStep("Detecting laboratory test names and values..."), 800);
+      setTimeout(() => setLoadingStep("Detecting laboratory test names and values..."), 600);
 
       const res = await axios.post(`${API_URL}/api/extract-report`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
+        timeout: 4000,
       });
 
       if (!res.data.success) {
-        setError(res.data.error || "We could not read this report. Please upload a clearer PDF/image or enter the values manually.");
-        setLoading(false);
-        return;
+        throw new Error(res.data.error || "Server could not parse document");
       }
 
       setLoadingStep("Validating extracted parameters...");
       setTimeout(() => {
         setLoading(false);
         onExtractionComplete(res.data);
-      }, 500);
+      }, 400);
 
     } catch (err) {
-      setLoading(false);
-      const detail = err.response?.data?.detail || err.message;
-      setError(`Failed to extract report data: ${detail}. You can try again or enter values manually.`);
+      console.warn("Server-side extraction failed or unreachable, switching to browser extraction engine:", err);
+      setLoadingStep("Extracting document parameters directly in browser...");
+      try {
+        const clientResult = await extractReportClientSide(fileToUpload);
+        setLoadingStep("Validating clinical parameters...");
+        setTimeout(() => {
+          setLoading(false);
+          onExtractionComplete(clientResult);
+        }, 500);
+      } catch (clientErr) {
+        setLoading(false);
+        setError("Could not parse file. You can test with a demo report or enter values manually.");
+      }
     }
   };
 

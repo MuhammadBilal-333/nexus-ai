@@ -100,20 +100,20 @@ export default function App() {
     setPredicting(true);
     setPredictionError("");
 
-    try {
-      const payload = {
-        age: confirmedData.patient.age,
-        sex: confirmedData.patient.sex,
-        haemoglobin: confirmedData.parameters.haemoglobin,
-        platelet_count: confirmedData.parameters.platelet_count,
-        pdw: confirmedData.parameters.pdw,
-        wbc_count: confirmedData.parameters.wbc_count || 0,
-        differential_count: confirmedData.parameters.differential_count || 1,
-        rbc_panel: confirmedData.parameters.rbc_panel || 1,
-        patient_name: confirmedData.patient.name || "Not Specified",
-        source_filename: confirmedData.report_info?.filename || "Uploaded Report",
-      };
+    const payload = {
+      age: confirmedData.patient.age,
+      sex: confirmedData.patient.sex,
+      haemoglobin: confirmedData.parameters.haemoglobin,
+      platelet_count: confirmedData.parameters.platelet_count,
+      pdw: confirmedData.parameters.pdw,
+      wbc_count: confirmedData.parameters.wbc_count || 0,
+      differential_count: confirmedData.parameters.differential_count || 1,
+      rbc_panel: confirmedData.parameters.rbc_panel || 1,
+      patient_name: confirmedData.patient.name || "Not Specified",
+      source_filename: confirmedData.report_info?.filename || "Uploaded Report",
+    };
 
+    try {
       const headers = authSession?.token
         ? { Authorization: `Bearer ${authSession.token}` }
         : {};
@@ -128,21 +128,16 @@ export default function App() {
       });
       setMode("RESULT");
     } catch (err) {
-      console.error("Prediction error:", err);
-      // If network error (backend unreachable), use client-side clinical fallback
-      if (!err.response) {
-        const fallbackResult = calculateClinicalRisk(payload);
-        setResult(fallbackResult);
-        setAnswers({
-          ...payload,
-          patient: confirmedData.patient,
-          report_info: confirmedData.report_info,
-        });
-        setMode("RESULT");
-        return;
-      }
-      const detail = err.response?.data?.detail || err.message;
-      setPredictionError(`Screening failed: ${detail}. Please check backend connection.`);
+      console.warn("Backend prediction failed or unreachable, switching to clinical fallback engine:", err);
+      // Client-side clinical decision support fallback
+      const fallbackResult = calculateClinicalRisk(payload);
+      setResult(fallbackResult);
+      setAnswers({
+        ...payload,
+        patient: confirmedData.patient,
+        report_info: confirmedData.report_info,
+      });
+      setMode("RESULT");
     } finally {
       setPredicting(false);
     }

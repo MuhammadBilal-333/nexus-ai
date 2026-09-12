@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import axios from "axios";
+import { getClinicalChatResponse } from "../utils/clinicalFallback";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -50,17 +51,12 @@ export default function ChatbotModal({ patientContext }) {
         history: newMessages.slice(-6),
       };
 
-      const res = await axios.post(`${API_URL}/api/chat`, payload);
+      const res = await axios.post(`${API_URL}/api/chat`, payload, { timeout: 3000 });
       setMessages([...newMessages, { role: "assistant", content: res.data.response }]);
     } catch (err) {
-      setMessages([
-        ...newMessages,
-        {
-          role: "assistant",
-          content:
-            "⚠️ I'm having trouble connecting to the health assistant service right now. Please ensure the backend server is running.",
-        },
-      ]);
+      console.warn("Backend chat unavailable, using autonomous clinical assistant engine:", err);
+      const assistantReply = getClinicalChatResponse(userMsg, patientContext, newMessages);
+      setMessages([...newMessages, { role: "assistant", content: assistantReply }]);
     } finally {
       setLoading(false);
     }
